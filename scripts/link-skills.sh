@@ -111,8 +111,8 @@ selection="$(
         --sync \
         --delimiter "$TAB" \
         --with-nth 1 \
-        --preview 'printf "%s: %s\n" "$FZF_PREVIEW_2" "$FZF_PREVIEW_3"' \
-        --preview-window right:40% \
+        --preview 'printf "%s: %s\n" {2} {3}' \
+        --preview-window right:40%,wrap \
         --bind 'start:select-all,ctrl-a:select-all,ctrl-d:deselect-all' \
         --prompt 'Select skills to install: '
 )" || rc=$?
