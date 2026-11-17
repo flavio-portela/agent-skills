@@ -5,7 +5,7 @@
 // injectable dependency defaulting to the real ink picker, so the contract
 // tests can script the selection without a terminal.
 
-import {readdirSync, readFileSync, mkdirSync, rmSync, symlinkSync, realpathSync} from 'node:fs';
+import {cpSync, readdirSync, readFileSync, mkdirSync, rmSync, symlinkSync, realpathSync} from 'node:fs';
 import {homedir} from 'node:os';
 import {basename, dirname, join, resolve, sep} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -16,7 +16,7 @@ const HARNESS_SUBDIRS = ['.claude/skills', '.agents/skills'];
 
 function usageText() {
   return [
-    'Usage: link-skills.mjs [DIR ...]',
+    'Usage: link-skills.mjs [--copy] [DIR ...]',
     '',
     'Interactively select the skills from this repository to install into the',
     '.claude/skills and .agents/skills directories under each DIR, creating them',
@@ -27,23 +27,30 @@ function usageText() {
     '',
     '  DIR ...   Base directories (default: $HOME). Skills are placed in',
     '            DIR/.claude/skills and DIR/.agents/skills.',
+    '  --copy    Copy skill folders instead of symlinking (the default). Copies are',
+    '            snapshots; re-run after a git pull to refresh them.',
   ].join('\n');
 }
 
-// Parse the command line: the help flag, base directory arguments, and the
+// Parse the command line: help and copy flags, base directory arguments, and the
 // rejection of unknown options before anything else happens.
 function parseArgs(argv) {
   const bases = [];
+  let mode = 'link';
   for (const arg of argv) {
     if (arg === '-h' || arg === '--help') {
       return {help: true, bases};
+    }
+    if (arg === '--copy') {
+      mode = 'copy';
+      continue;
     }
     if (arg.startsWith('-')) {
       return {error: arg, bases};
     }
     bases.push(arg);
   }
-  return {bases};
+  return {bases, mode};
 }
 
 function scanSkills() {
@@ -118,7 +125,7 @@ export async function main(argv, {pick: injectedPick} = {}) {
   }
 
   const candidates = scanSkills();
-  const result = await pick({candidates, bases, mode: 'link'});
+  const result = await pick({candidates, bases, mode: parsed.mode});
   if (result.kind === 'aborted') {
     console.error('Aborted. Nothing installed.');
     return 130;
@@ -142,8 +149,9 @@ export async function main(argv, {pick: injectedPick} = {}) {
     for (const item of candidates.filter(c => names.has(c.name))) {
       const target = join(dest, item.name);
       rmSync(target, {recursive: true, force: true});
-      symlinkSync(item.source, target);
-      console.log(`linked ${item.name} -> ${item.source} (${dest})`);
+      if (parsed.mode === 'copy') cpSync(item.source, target, {recursive: true});
+      else symlinkSync(item.source, target);
+      console.log(`${parsed.mode === 'copy' ? 'copied' : 'linked'} ${item.name} -> ${item.source} (${dest})`);
     }
   }
   return 0;

@@ -31,6 +31,22 @@ const tick = (ms = 50) => new Promise(r => setTimeout(r, ms));
 const stripAnsi = s => s.replace(/\x1b\[[0-9;]*m/g, '');
 const freshDir = prefix => mkdtempSync(join(tmpdir(), prefix));
 
+function assertSnapshot(source, copy) {
+  assert.ok(lstatSync(copy).isDirectory(), `${copy} is a real directory`);
+  assert.deepEqual(readdirSync(copy).sort(), readdirSync(source).sort());
+  for (const name of readdirSync(source)) {
+    const src = join(source, name);
+    const dest = join(copy, name);
+    const stat = lstatSync(src);
+    if (stat.isDirectory()) assertSnapshot(src, dest);
+    else if (stat.isSymbolicLink()) assert.equal(readlinkSync(dest), readlinkSync(src));
+    else {
+      assert.ok(lstatSync(dest).isFile());
+      assert.deepEqual(readFileSync(dest), readFileSync(src));
+    }
+  }
+}
+
 // Spawn the real installer as a user would. Stdio is plain pipes, so stdin
 // is never a TTY unless a pty layer wraps it.
 function runProcess(args, {bin = BIN, cwd = REPO} = {}) {
@@ -52,6 +68,8 @@ test('help works without a TTY and documents the flow', async () => {
   const {code, stdout} = await runProcess(['--help']);
   assert.equal(code, 0);
   assert.match(stdout, /Usage:/);
+  assert.match(stdout, /--copy/);
+  assert.match(stdout, /snapshot/);
 });
 
 test('unknown options are rejected with usage before any effect', async () => {
@@ -371,6 +389,76 @@ test('entry scans every skill and links the selection into both harnesses of eve
   assert.equal(stdout, lines.join('\n'));
 });
 
+test('entry copies selected skills into both harnesses of every base with copied summary lines', async t => {
+  const dir = freshDir('lks-copy-');
+  t.after(() => rmSync(dir, {recursive: true, force: true}));
+  const bases = [join(dir, 'base a'), join(dir, 'base b')];
+  const {code, input, stdout} = await runEntry([bases[0], '--copy', bases[1]], {kind: 'selected', names: ['tdd']});
+  assert.equal(code, 0);
+  assert.equal(input.mode, 'copy');
+  assert.deepEqual(input.bases, bases);
+  assert.deepEqual(input.candidates, repoCandidates());
+  const source = join(REPO, 'skills/engineering/tdd');
+  const lines = [];
+  for (const base of bases) {
+    for (const sub of ['.claude/skills', '.agents/skills']) {
+      const dest = join(base, sub);
+      assert.deepEqual(readdirSync(dest), ['tdd']);
+      assertSnapshot(source, join(dest, 'tdd'));
+      lines.push(`copied tdd -> ${source} (${dest})`);
+    }
+  }
+  assert.equal(stdout, lines.join('\n'));
+});
+
+test('copy mode refreshes stale copies and replaces links without touching unselected entries or link sources', async t => {
+  const dir = freshDir('lks-copy-refresh-');
+  t.after(() => rmSync(dir, {recursive: true, force: true}));
+  const repo = join(dir, 'repo');
+  const source = join(repo, 'skills/engineering/alpha');
+  mkdirSync(join(source, 'nested/empty'), {recursive: true});
+  writeFileSync(join(source, 'SKILL.md'), '---\nname: alpha\ndescription: A fixture skill\n---\n');
+  writeFileSync(join(source, 'nested/data'), Buffer.from([0, 1, 255]));
+  writeFileSync(join(source, '.hidden'), 'first version');
+  mkdirSync(join(repo, 'installer'));
+  cpSync(join(REPO, 'installer/entry.mjs'), join(repo, 'installer/entry.mjs'));
+  const {main: fixtureMain} = await import(pathToFileURL(join(repo, 'installer/entry.mjs')));
+  const base = join(dir, 'base');
+  const destinations = ['.claude/skills', '.agents/skills'].map(sub => join(base, sub));
+  const oldSource = join(dir, 'old-source');
+  mkdirSync(oldSource);
+  writeFileSync(join(oldSource, 'keep'), 'do not change');
+  for (const dest of destinations) {
+    mkdirSync(dest, {recursive: true});
+    symlinkSync(oldSource, join(dest, 'alpha'));
+    mkdirSync(join(dest, 'foreign'));
+    writeFileSync(join(dest, 'foreign/NOTE'), 'hand edited');
+    writeFileSync(join(dest, 'unselected-file'), 'keep file');
+    symlinkSync('/missing/keep', join(dest, 'unselected-link'));
+  }
+  const untouched = destinations.flatMap(dest => ['foreign', 'foreign/NOTE', 'unselected-file', 'unselected-link']
+    .map(name => [join(dest, name), lstatSync(join(dest, name))]));
+  const install = () => runEntry(['--copy', base], {kind: 'selected', names: ['alpha']}, fixtureMain);
+  assert.equal((await install()).code, 0);
+  for (const dest of destinations) assertSnapshot(source, join(dest, 'alpha'));
+  writeFileSync(join(source, '.hidden'), 'second version');
+  rmSync(join(source, 'nested/data'));
+  writeFileSync(join(source, 'nested/new'), 'new upstream file');
+  for (const dest of destinations) {
+    assert.equal(readFileSync(join(dest, 'alpha/.hidden'), 'utf8'), 'first version', 'snapshot is pinned until re-run');
+    writeFileSync(join(dest, 'alpha/local-only'), 'stale file');
+  }
+  assert.equal((await install()).code, 0);
+  for (const dest of destinations) assertSnapshot(source, join(dest, 'alpha'));
+  assert.equal(readFileSync(join(oldSource, 'keep'), 'utf8'), 'do not change');
+  for (const [path, before] of untouched) assert.deepEqual(lstatSync(path), before);
+  for (const dest of destinations) {
+    assert.equal(readFileSync(join(dest, 'foreign/NOTE'), 'utf8'), 'hand edited');
+    assert.equal(readFileSync(join(dest, 'unselected-file'), 'utf8'), 'keep file');
+    assert.equal(readlinkSync(join(dest, 'unselected-link')), '/missing/keep');
+  }
+});
+
 test('entry replaces selected directories, files and links but leaves all unselected entries untouched', async t => {
   const base = freshDir('lks-additive-');
   t.after(() => rmSync(base, {recursive: true, force: true}));
@@ -433,6 +521,7 @@ const shellQuote = value => "'" + value.replaceAll("'", "'\\''") + "'";
 
 for (const scenario of [
   {name: 'Enter installs all into the default home base', keys: ['Enter'], code: 0, install: true},
+  {name: '--copy installs snapshots through the real picker', args: ['--copy'], keys: ['Enter'], code: 0, install: true, copy: true},
   {name: 'Esc aborts', keys: ['Escape'], code: 130, message: 'Aborted'},
   {name: 'ctrl+c aborts', keys: ['C-c'], code: 130, message: 'Aborted'},
   {name: 'empty selection is a no-op', keys: ['x', 'Enter'], code: 0, message: 'Nothing selected'},
@@ -447,7 +536,7 @@ for (const scenario of [
       tmux('kill-server');
       rmSync(dir, {recursive: true, force: true});
     });
-    const command = `env HOME=${shellQuote(base)} TERM=xterm-256color ${shellQuote(process.execPath)} ${shellQuote(BIN)}; printf '%s' "$?" > ${shellQuote(rcFile)}; sleep 30`;
+    const command = `env HOME=${shellQuote(base)} TERM=xterm-256color ${shellQuote(process.execPath)} ${shellQuote(BIN)} ${(scenario.args ?? []).map(shellQuote).join(' ')}; printf '%s' "$?" > ${shellQuote(rcFile)}; sleep 30`;
     const started = tmux('new-session', '-d', '-s', 'installer', '-x', '120', '-y', '40', command);
     assert.equal(started.status, 0, started.stderr);
     let ready = false;
@@ -469,9 +558,12 @@ for (const scenario of [
       const candidates = repoCandidates();
       for (const sub of ['.claude/skills', '.agents/skills']) {
         assert.deepEqual(readdirSync(join(base, sub)).sort(), candidates.map(c => c.name).sort());
-        for (const item of candidates) assert.equal(readlinkSync(join(base, sub, item.name)), item.source);
+        for (const item of candidates) {
+          if (scenario.copy) assertSnapshot(item.source, join(base, sub, item.name));
+          else assert.equal(readlinkSync(join(base, sub, item.name)), item.source);
+        }
       }
-      assert.match(output, /linked code-review ->/);
+      assert.match(output, scenario.copy ? /copied code-review ->/ : /linked code-review ->/);
     } else {
       assert.ok(!existsSync(base), 'no installation effects');
       assert.ok(output.includes(scenario.message), output);
