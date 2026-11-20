@@ -106,6 +106,9 @@ async function askSkillSelection(skills) {
     message: 'Select the skills to install',
     choices,
     required: true,
+    // Large enough for the full catalog (27 skills + 2 separators today) to
+    // render on a single page. Bump it when the list outgrows it.
+    pageSize: 30,
   });
 }
 
