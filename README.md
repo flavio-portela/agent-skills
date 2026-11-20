@@ -22,7 +22,41 @@ Every skill is one of two kinds:
 
 ## Install
 
-The interactive installer is being rebuilt and is tracked in [issues #2 to #5](https://github.com/flavio-portela/agent-skills/issues/2). Until it lands, install a skill by symlinking or copying its folder from `skills/` into `.claude/skills` or `.agents/skills` under your base directory (default `$HOME`).
+Run the one-liner:
+
+```
+curl -fsSL https://raw.githubusercontent.com/flavio-portela/agent-skills/main/install.sh | sh
+```
+
+The bootstrap installs the `agent-skills` command (a launcher at `~/.local/bin/agent-skills`) backed by a managed checkout of this repo at `~/.agent-skills/repo`, then launches the interactive installer in your current directory. The installer asks which skills to install (every skill preselected, grouped by bucket), how (symlink by default, or copy), and into which harness skill directories (`.agents/skills`, `.claude/skills`, or both by default), and confirms the exact target paths before writing anything.
+
+Every decision is a flag, and a fully flagged run is non-interactive:
+
+```
+agent-skills install --all --symlink --harness both --dir ~/my-project
+```
+
+| Flag | Meaning |
+| --- | --- |
+| `--all` | Install every skill |
+| `--skill a,b` | Install exactly the named skills |
+| `--symlink` / `--copy` | Link skills into the managed checkout (default) / copy self-contained folders |
+| `--harness agents\|claude\|both` | Which harness skill directories receive the skills (default: both) |
+| `--dir <path>` | Base directory to install into (default: current directory) |
+| `--force` | Replace existing entries at the target paths |
+
+Symlinked installs stay live-linked to the managed checkout: re-running the one-liner refreshes the checkout and the tool, which is the update path for symlinked installs. Copy mode is self-contained and does not update on its own. Existing entries (hand-written or previously installed) are skipped and reported, never overwritten; `--force` replaces them deliberately.
+
+Skills reference each other by name (the router maps every user-invoked skill), so the full skill set is the supported configuration. Installing a subset works, but any skill a flow references must be present for that flow to work.
+
+To install from a fork, point the bootstrap at it:
+
+```sh
+export AGENT_SKILLS_REPO=https://github.com/you/agent-skills.git
+curl -fsSL https://raw.githubusercontent.com/you/agent-skills/main/install.sh | sh
+```
+
+`AGENT_SKILLS_DIR` moves the managed directory away from `~/.agent-skills`.
 
 ## Layout
 
@@ -32,6 +66,12 @@ skills/
   productivity/   # General workflow tools, one folder per skill
 docs/
   agents/         # Agent skill configuration (issue tracker, triage labels, domain docs)
+  adr/            # Architecture decision records
+install.sh        # Bootstrap one-liner (see Install)
+bin/agent-skills.js # CLI entry file (TTY layer: flags plus prompts)
+lib/install.js    # Core install behaviour, tested directly
+test/             # node --test suites, one file per seam
+package.json      # CLI manifest (name: agent-skills)
 CLAUDE.md         # Repo conventions (AGENTS.md is a symlink to it)
 GLOSSARY.md       # Domain vocabulary
 ```

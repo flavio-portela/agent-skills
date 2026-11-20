@@ -1,0 +1,16 @@
+{
+  "name": "agent-skills",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Install agent skills from this repo into a harness's skill directories.",
+  "type": "module",
+  "bin": {
+    "agent-skills": "./bin/agent-skills.js"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@inquirer/prompts": "^7.3.2"
+  }
+}

@@ -31,3 +31,7 @@ _Avoid_: index, catalog
 **Installed skill**:
 A skill selected in the interactive picker, then linked or copied from this repo into a harness's skill directory.
 _Avoid_: deployed, registered
+
+**Managed checkout**:
+The clone of this repo owned by the installer, kept at a stable location on the user's machine. Symlinked installed skills point into it, and re-running the installer's one-liner refreshes it.
+_Avoid_: source clone, skill cache
