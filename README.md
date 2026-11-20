@@ -22,19 +22,7 @@ Every skill is one of two kinds:
 
 ## Install
 
-`scripts/link-skills.sh` installs the skills you pick into the `.claude/skills` and `.agents/skills` directories under each base directory it is given. It is interactive-only and requires [fzf](https://github.com/junegunn/fzf): an fzf multi-select lists every skill in the repo with its description, all pre-selected, so pressing Enter installs everything and unchecking narrows it down.
-
-```sh
-scripts/link-skills.sh                # installs into ~/.claude/skills and ~/.agents/skills
-scripts/link-skills.sh ~/myproject    # installs into ~/myproject/.claude/skills and ~/myproject/.agents/skills
-```
-
-- With no argument the base directory is `$HOME`, so the default install is `~/.claude/skills` and `~/.agents/skills`.
-- The selection is additive: skills already installed that you do not pick are left alone, and the script never removes anything.
-- By default each entry is a symlink into this repo, so a `git pull` keeps installed skills current.
-- Pass `--copy` to copy the skill folders instead. Copies are a snapshot, so re-run the script after a `git pull`.
-- `scripts/list-skills.sh` lists the available skills.
-- Re-run the script after adding, removing, or renaming a skill.
+The interactive installer is being rebuilt and is tracked in [issues #2 to #5](https://github.com/flavio-portela/agent-skills/issues/2). Until it lands, install a skill by symlinking or copying its folder from `skills/` into `.claude/skills` or `.agents/skills` under your base directory (default `$HOME`).
 
 ## Layout
 
@@ -42,11 +30,8 @@ scripts/link-skills.sh ~/myproject    # installs into ~/myproject/.claude/skills
 skills/
   engineering/    # Daily code work, one folder per skill
   productivity/   # General workflow tools, one folder per skill
-scripts/
-  link-skills.sh  # Interactively link or copy skills into harness skill directories
-  list-skills.sh  # List the available skills
-tests/
-  test-link-skills.sh  # Tests for the install script
+docs/
+  agents/         # Agent skill configuration (issue tracker, triage labels, domain docs)
 CLAUDE.md         # Repo conventions (AGENTS.md is a symlink to it)
 GLOSSARY.md       # Domain vocabulary
 ```

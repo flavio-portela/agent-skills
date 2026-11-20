@@ -30,7 +30,3 @@ Triage uses the five default GitHub labels (`needs-triage`, `needs-info`, `ready
 ### Domain docs
 
 Single-context: root `GLOSSARY.md` and `docs/adr/`. Before exploring the codebase, read `docs/agents/domain.md`.
-
-## Install
-
-Run `scripts/link-skills.sh` to install skills into the local harness skill directories (`~/.claude/skills`, `~/.agents/skills`); pass a base directory to install into that directory's `.claude/skills` and `.agents/skills` instead of `$HOME`. The script is interactive-only and requires fzf: it opens a multi-select of every skill in the repo, all pre-selected, so a plain Enter installs everything and unchecking narrows it down. The selection is additive: skills already installed that you do not pick are left alone, and the script never removes anything. Each linked entry is a symlink into this repo, so a `git pull` keeps installed skills current; re-run the script after adding, removing, or renaming a skill. `scripts/list-skills.sh` lists the available skills.
