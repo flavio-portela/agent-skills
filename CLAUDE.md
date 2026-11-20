@@ -21,11 +21,11 @@ Every skill that dispatches a subagent says to start it with a fresh context win
 
 ### Issue tracker
 
-Issues and specs live as local Markdown files under `.scratch/`. Before reading or writing tickets, read `docs/agents/issue-tracker.md`.
+Issues and specs live as GitHub issues on `flavio-portela/agent-skills`. Before reading or writing tickets, read `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
-Triage uses the five default role strings in each issue's `Status:` line. Before triaging, read `docs/agents/triage-labels.md`.
+Triage uses the five default GitHub labels (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). Before triaging, read `docs/agents/triage-labels.md`.
 
 ### Domain docs
 
